@@ -3,5 +3,10 @@ title: "Index"
 output: html_document
 ---
 
-This is my training website.
+## Analysis plan
 
+- [Data Cleaning](data-cleaning.html)
+- Data Interpolation and Gap filling
+- Linear models
+- Animal movement models based on telemetry
+- Data visualization
