@@ -1,0 +1,161 @@
+---
+title: "Session 8"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(readr)
+```
+
+## Read in data
+
+```{r}
+catch_original <- read_csv("https://knb.ecoinformatics.org/knb/d1/mn/v2/object/df35b.302.1")
+```
+
+## Clean and Reshape data
+
+remove unnecessary columns
+```{r}
+catch_data <- catch_original %>% 
+  select(Region, Year, Chinook, Sockeye, Coho, Pink, Chum)
+
+head(catch_data)
+```
+
+```{r}
+catch_data <- catch_original %>% 
+  select(-All, -notesRegCode)
+
+head(catch_data)
+```
+
+```{r}
+glimpse(catch_data)
+```
+
+check column typing
+
+```{r}
+catch_clean <- catch_data %>% 
+  mutate(Chinook = as.numeric(Chinook))
+```
+
+```{r}
+i <- which(is.na(catch_clean$Chinook))
+```
+
+```{r}
+catch_data[i,]
+```
+
+```{r}
+catch_clean <- catch_data %>% 
+  mutate(Chinook = if_else(Chinook == "I", 1, as.numeric(Chinook))) # dplyr if_else
+```
+
+```{r}
+catch_clean[i,]
+```
+
+reshape data
+
+```{r}
+catch_long <- catch_clean %>% 
+  pivot_longer(cols = -c(Region, Year), names_to = "species", 
+               values_to = "catch")
+
+head(catch_long)
+```
+
+```{r}
+head(catch_clean)
+```
+
+```{r}
+catch_wide <- catch_long %>% 
+  pivot_wider(names_from = species, values_from = catch)
+
+head(catch_wide)
+```
+
+```{r}
+catch_long <- catch_long %>% 
+  rename(catch_thousands = catch)
+
+head(catch_long)
+```
+
+```{r}
+catch_long <- catch_long %>% 
+  mutate(catch = catch_thousands * 1000) %>% 
+  select(-catch_thousands)
+
+head(catch_long)
+```
+
+```{r}
+mean_region <- catch_long %>% 
+  group_by(Region) %>% 
+  summarise(catch_mean = mean(catch))
+
+head(mean_region)
+```
+
+```{r}
+catch_long %>% 
+  group_by(Region) %>% 
+  summarise(n=n())
+```
+
+```{r}
+sd_region <- catch_long %>% 
+  group_by(Region) %>% 
+  summarise(catch_sd = sd(catch))
+
+head(sd_region)
+```
+
+```{r}
+mean_regspecies <- catch_long %>% 
+  group_by(Region) %>%
+  group_by(species) %>% 
+  summarise(catch_mean = mean(catch))
+
+head(mean_regspecies)
+```
+
+```{r}
+catch_long %>% 
+  filter(Region == "SSE")
+```
+
+```{r}
+catch_long %>% 
+  group_by(Region) %>% 
+  summarise(mean_catch = mean(catch)) %>% 
+  arrange(desc(mean_catch))
+```
+
+## Join to Regions dataset
+
+```{r}
+region_defs <- read_csv("https://knb.ecoinformatics.org/knb/d1/mn/v2/object/df35b.303.1") %>% 
+    select(code, mgmtArea)
+
+head(region_defs)
+```
+
+```{r}
+left_join(catch_long, region_defs, by = c("Region" = "code"))
+```
+
+
+
+
