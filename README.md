@@ -7,3 +7,5 @@ Bryce is a collaborator on this git repository.
 Fletcher then made some additional changes.
 
 Jasmine making some changes here
+
+This is Bryce's readme example.
