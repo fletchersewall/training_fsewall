@@ -1,0 +1,138 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(rvest)
+library(readr)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+```
+## Load the species table using the code in the Setup block below.
+
+```{r}
+webpage <- read_html("https://www.pwrc.usgs.gov/bbl/manual/speclist.cfm")
+
+tbls <- html_nodes(webpage, "table") %>% 
+    html_table(fill = TRUE)
+
+species <- tbls[[1]] %>% 
+    clean_names() %>% 
+    select(alpha_code, common_name) %>% 
+    mutate(alpha_code = tolower(alpha_code))
+```
+
+## Read the following two files into your environment.
+
+```{r}
+pred <- read_csv("https://arcticdata.io/metacat/d1/mn/v2/object/urn%3Auuid%3A9ffec04c-7e2d-41dd-9e88-b6c2e8c4375e")
+
+nests <- read_csv("https://arcticdata.io/metacat/d1/mn/v2/object/urn%3Auuid%3A982bd2fc-4edf-4da7-96ef-0d11b853102d")
+```
+
+
+Write a function that will translate species codes into common names.
+Hint: The fastest way to do this involves adding a column to the data.frame. Your function will have two arguments
+Optional Extra Challenge: For a little extra challenge, try to incorporate an if statement that looks for NA values in the common name field you are adding. What other conditionals might you include to make your function smarter?
+
+Simple version:
+```{r}
+#' Function to add common name to data.frame according to the BBL list of species codes
+
+#' @param df A data frame containing BBL species codes in column `species`
+#' @param species A data frame defining BBL species codes with columns `alpha_code` and `common_name`
+#' @return A data frame with original data df, plus the common name of species
+
+assign_species_name <- function(df, species){
+    return_df <- left_join(df, species, by = c("species" = "alpha_code"))
+    return(return_df)
+}
+```
+
+Version with conditionals (data checks):
+```{r}
+#' Function to add common name to data.frame according to the BBL list of species codes
+
+#' @param df A data frame containing BBL species codes in column `species`
+#' @param species A data frame defining BBL species codes with columns `alpha_code` and `common_name`
+#' @return A data frame with original data df, plus the common name of species
+
+assign_species_name <- function(df, species){
+    if (!("alpha_code" %in% names(species)) |
+        !("species" %in% names(df)) |
+        !("common_name" %in% names(species))){
+      stop("Tables appear to be formatted incorrectly.")
+    }  
+  
+    return_df <- left_join(df, species, by = c("species" = "alpha_code"))
+    
+    if (nrow(return_df) > nrow(df)){
+      warning("Joined table has more rows than original table. Check species table for duplicated code values.")
+    }
+    
+    if (length(which(is.na(return_df$common_name))) > 0){
+      x <- length(which(is.na(return_df$common_name)))
+      warning(paste("Common name has", x, "rows containing NA"))
+    }
+    
+    return(return_df)
+        
+}
+```
+
+Calculate total number of predators by year and species, and plot the result.
+
+```{r}
+pred_species <- assign_species_name(pred, species) %>% 
+    group_by(year, common_name) %>% 
+    summarise(pred_count = sum(count, na.rm = T), .groups = "drop") %>% 
+    filter(!is.na(common_name))
+```
+
+```{r}
+ggplot(pred_species, aes(x = year, y = pred_count, color = common_name)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Year", y = "Number of Predators", color = "Species") +
+  theme_bw()
+```
+
+Calculate total number of eggs predated by year and species.
+
+```{r}
+nests_species <- assign_species_name(nests, species) %>% 
+  group_by(common_name, year) %>% 
+  summarise(total_predated = sum(number_eggs_predated, na.rm = T),
+            .groups = "drop") %>% 
+  filter(!is.na(common_name))
+```
+
+Calculate total number of predators across all species by year
+
+```{r}
+pred_total <- pred_species %>% 
+    group_by(year) %>% 
+    summarise(pred_count = sum(pred_count, na.rm = T), .groups = "drop")
+```
+
+Join egg predation data to total predator data.
+
+```{r}
+nest_pred <- left_join(nests_species, pred_total, by = "year")
+```
+
+Plot numbers of eggs predated by total predators by species
+
+```{r}
+ggplot(nest_pred, aes(x = pred_count, y = total_predated)) +
+    geom_point() +
+    facet_wrap(~common_name, scales = "free_y", ncol = 2) +
+    labs(x = "Number of Predators", y = "Number of Eggs Predated") +
+    theme_bw()
+```
